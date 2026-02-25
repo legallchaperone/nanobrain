@@ -11,7 +11,7 @@ git clone https://github.com/your-username/nanobrain.git
 cd nanobrain
 npm install
 npm run container:build
-export ANTHROPIC_API_KEY=sk-ant-...
+export ANTHROPIC_API_KEY=sk-ant-...   # or OPENAI_API_KEY, DEEPSEEK_API_KEY, GROQ_API_KEY, etc.
 npm run start
 ```
 
@@ -51,12 +51,23 @@ Where `n` is the number of co-retrieved memories (credit sharing) and reward com
 
 ## Configuration
 
-Edit `container/opencode.json` to change the model:
+Edit `container/opencode.json` to change the model and provider. OpenCode supports 75+ providers (Anthropic, OpenAI, DeepSeek, Groq, Google, etc.):
+
 ```json
 { "model": "anthropic/claude-sonnet-4-5-20250929" }
 ```
 
-Rebuild the container after config changes:
+Examples for other providers:
+
+| Provider | Model example | Env var |
+|----------|---------------|---------|
+| Anthropic | `anthropic/claude-sonnet-4-5-20250929` | `ANTHROPIC_API_KEY` |
+| OpenAI | `openai/gpt-4o` | `OPENAI_API_KEY` |
+| DeepSeek | `deepseek/deepseek-chat` | `DEEPSEEK_API_KEY` |
+| Groq | `groq/llama-3.3-70b-versatile` | `GROQ_API_KEY` |
+| Google | `google/gemini-2.0-flash` | `GOOGLE_GENERATIVE_AI_API_KEY` |
+
+Set the corresponding env var before `npm run start`. Rebuild the container after config changes:
 
 ```bash
 npm run container:build

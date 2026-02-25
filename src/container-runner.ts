@@ -1,10 +1,25 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import path from "node:path";
 
+export const PROVIDER_ENV_VARS = [
+  "ANTHROPIC_API_KEY",
+  "OPENAI_API_KEY",
+  "DEEPSEEK_API_KEY",
+  "GROQ_API_KEY",
+  "GOOGLE_GENERATIVE_AI_API_KEY",
+  "XAI_API_KEY",
+  "TOGETHER_API_KEY",
+  "MISTRAL_API_KEY",
+  "COHERE_API_KEY",
+  "AWS_ACCESS_KEY_ID",
+  "AWS_SECRET_ACCESS_KEY",
+  "AWS_PROFILE",
+  "AWS_REGION",
+] as const;
+
 export interface SpawnContainerOptions {
   projectRoot: string;
   sessionId: string;
-  apiKey: string;
   image?: string;
   memoryServerMountMode?: "ro" | "rw";
 }
@@ -15,7 +30,6 @@ export function spawnContainer(
   const {
     projectRoot,
     sessionId,
-    apiKey,
     image = "nanobrain-agent:latest",
     memoryServerMountMode = "ro",
   } = options;
@@ -44,11 +58,16 @@ export function spawnContainer(
     `${systemPromptPath}:/workspace/SYSTEM_PROMPT.md:ro`,
     "-e",
     "OPENCODE_CONFIG=/workspace/opencode.json",
-    "-e",
-    `ANTHROPIC_API_KEY=${apiKey}`,
-    image,
-    "opencode",
   ];
+
+  for (const key of PROVIDER_ENV_VARS) {
+    const value = process.env[key];
+    if (value) {
+      args.push("-e", `${key}=${value}`);
+    }
+  }
+
+  args.push(image, "opencode");
 
   return spawn("docker", args, { stdio: "pipe" });
 }

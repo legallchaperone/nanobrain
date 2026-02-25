@@ -8,7 +8,11 @@ import { CreditTracker } from "../memory-server/src/credit-tracker.js";
 import { memoryCompact } from "../memory-server/src/lifecycle.js";
 import { generateMemoryMd } from "../memory-server/src/memory-generator.js";
 import { MemoryStore } from "../memory-server/src/memory-store.js";
-import { destroyContainer, spawnContainer } from "./container-runner.js";
+import {
+  destroyContainer,
+  PROVIDER_ENV_VARS,
+  spawnContainer,
+} from "./container-runner.js";
 import { TaskScheduler } from "./task-scheduler.js";
 
 const VERSION = "0.1.0";
@@ -160,12 +164,11 @@ function buildSessionId(): string {
   return `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-async function runInteractiveSession(projectRoot: string, apiKey: string): Promise<void> {
+async function runInteractiveSession(projectRoot: string): Promise<void> {
   const sessionId = buildSessionId();
   const proc = spawnContainer({
     projectRoot,
     sessionId,
-    apiKey,
   });
 
   proc.stdout.on("data", (chunk) => process.stdout.write(chunk));
@@ -255,9 +258,11 @@ async function main(): Promise<void> {
   const parent = path.dirname(entryDir);
   const projectRoot =
     path.basename(parent) === "dist" ? path.dirname(parent) : parent;
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY is required.");
+  const hasProviderKey = PROVIDER_ENV_VARS.some((k) => process.env[k]);
+  if (!hasProviderKey) {
+    throw new Error(
+      "At least one provider API key is required. Set one of: ANTHROPIC_API_KEY, OPENAI_API_KEY, DEEPSEEK_API_KEY, GROQ_API_KEY, etc.",
+    );
   }
 
   console.log(`nanobrain v${VERSION}`);
@@ -267,7 +272,7 @@ async function main(): Promise<void> {
 
   await generateSessionMemory(projectRoot);
   await commitMemoryChanges(projectRoot, "pre-session snapshot");
-  await runInteractiveSession(projectRoot, apiKey);
+  await runInteractiveSession(projectRoot);
   await commitMemoryChanges(projectRoot, "post-session snapshot");
   await runScheduler(projectRoot);
 }
