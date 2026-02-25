@@ -10,11 +10,18 @@ Memories that helped the agent succeed gain credit. Memories that didn't get pru
 git clone https://github.com/your-username/nanobrain.git
 cd nanobrain
 npm install
-cd memory-server && npm install && cd ..
-./container/build.sh
+npm run container:build
 export ANTHROPIC_API_KEY=sk-ant-...
 npm run start
 ```
+
+Once started, the host CLI supports local control commands:
+
+- `/good` - reward memories used in the current session
+- `/bad` - penalize memories used in the current session
+- `/status` - show memory count and average score
+- `/compact` - run consolidation, promotion, and pruning immediately
+- `/quit` - end the current session
 
 ## How It Works
 
@@ -47,6 +54,12 @@ Where `n` is the number of co-retrieved memories (credit sharing) and reward com
 Edit `container/opencode.json` to change the model:
 ```json
 { "model": "anthropic/claude-sonnet-4-5-20250929" }
+```
+
+Rebuild the container after config changes:
+
+```bash
+npm run container:build
 ```
 
 Edit `memory/STRATEGY.md` to change memory management behavior (pruning thresholds, consolidation rules).
