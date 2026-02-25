@@ -2,6 +2,7 @@ import path from "node:path";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
 
 import { CreditTracker } from "./credit-tracker.js";
 import { detectContradiction } from "./contradiction.js";
@@ -9,7 +10,6 @@ import { memoryCompact } from "./lifecycle.js";
 import { MemoryStore } from "./memory-store.js";
 import { generateMemoryMd } from "./memory-generator.js";
 import { creditWeightedSearch } from "./retrieval.js";
-import { MemoryType } from "./types.js";
 
 export interface MemoryServerContext {
   memoryDir: string;
@@ -36,73 +36,81 @@ function toolError(message: string): { isError: true; content: [{ type: "text"; 
   };
 }
 
-function argsFrom(extra: unknown): Record<string, unknown> {
-  if (!extra || typeof extra !== "object") {
-    return {};
-  }
-  const maybe = extra as { request?: { params?: { arguments?: unknown } } };
-  const args = maybe.request?.params?.arguments;
-  return args && typeof args === "object" ? (args as Record<string, unknown>) : {};
-}
-
-function asString(value: unknown, key: string): string {
-  if (typeof value !== "string" || value.trim() === "") {
-    throw new Error(`Missing required string: ${key}`);
-  }
-  return value;
-}
-
-function asStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.filter((item): item is string => typeof item === "string");
-}
-
-function asBool(value: unknown, defaultValue = false): boolean {
-  return typeof value === "boolean" ? value : defaultValue;
-}
-
-function clampLimit(value: unknown, defaultValue: number, max: number): number {
-  if (typeof value !== "number" || Number.isNaN(value)) {
+function clampLimit(value: number | undefined, defaultValue: number, max: number): number {
+  if (value === undefined || Number.isNaN(value)) {
     return defaultValue;
   }
   const rounded = Math.floor(value);
   return Math.max(1, Math.min(max, rounded));
 }
 
-function isMemoryType(value: unknown): value is MemoryType {
-  return value === "entity" || value === "episode";
-}
-
 function sessionId(): string {
   return process.env.SESSION_ID ?? "local-session";
 }
+
+const storeInputSchema = {
+  type: z.enum(["entity", "episode"]),
+  category: z.string().optional(),
+  name: z.string(),
+  content: z.string(),
+  tags: z.array(z.string()).optional(),
+  pinned: z.boolean().optional(),
+};
+
+const retrieveInputSchema = {
+  id: z.string(),
+};
+
+const searchInputSchema = {
+  query: z.string(),
+  type: z.enum(["entity", "episode"]).optional(),
+  limit: z.number().optional(),
+};
+
+const updateInputSchema = {
+  id: z.string(),
+  content: z.string(),
+};
+
+const deleteInputSchema = {
+  id: z.string(),
+};
+
+const reportInputSchema = {
+  top_n: z.number().optional(),
+};
 
 export async function startMcpServer(memoryDir?: string): Promise<void> {
   const ctx = createMemoryServer(memoryDir);
   const server = new McpServer({ name: "clawbrain", version: "0.1.0" });
 
-  server.tool(
+  server.registerTool(
     "memory_store",
-    "Store a memory entry as entity or episode.",
-    async (extra) => {
+    {
+      description: "Store a memory entry as entity or episode.",
+      inputSchema: storeInputSchema,
+    },
+    async (args) => {
       try {
-        const args = argsFrom(extra);
-        const type = asString(args.type, "type");
-        const name = asString(args.name, "name");
-        const content = asString(args.content, "content");
-        const tags = asStringArray(args.tags);
-        const pinned = asBool(args.pinned, false);
+        const tags = args.tags ?? [];
+        const pinned = args.pinned ?? false;
 
-        if (type === "entity") {
-          const category = asString(args.category, "category");
-          const result = await ctx.memoryStore.storeEntity(category, name, content, tags, pinned);
+        if (args.type === "entity") {
+          if (!args.category) {
+            return toolError("category is required when type is entity");
+          }
+          const result = await ctx.memoryStore.storeEntity(
+            args.category,
+            args.name,
+            args.content,
+            tags,
+            pinned,
+          );
           ctx.creditTracker.ensureRecord(result.id);
           return textResult(result);
         }
-        if (type === "episode") {
-          const result = await ctx.memoryStore.storeEpisode(name, content, tags, pinned);
+        if (args.type === "episode") {
+          const result = await ctx.memoryStore.storeEpisode(args.name, args.content, tags, pinned);
           ctx.creditTracker.ensureRecord(result.id);
           return textResult(result);
         }
@@ -115,16 +123,17 @@ export async function startMcpServer(memoryDir?: string): Promise<void> {
     },
   );
 
-  server.tool(
+  server.registerTool(
     "memory_retrieve",
-    "Retrieve a memory by ID.",
-    async (extra) => {
+    {
+      description: "Retrieve a memory by ID.",
+      inputSchema: retrieveInputSchema,
+    },
+    async (args) => {
       try {
-        const args = argsFrom(extra);
-        const id = asString(args.id, "id");
-        const entry = await ctx.memoryStore.retrieve(id);
-        const score = ctx.creditTracker.getScore(id);
-        ctx.creditTracker.recordRetrieval(sessionId(), [id]);
+        const entry = await ctx.memoryStore.retrieve(args.id);
+        const score = ctx.creditTracker.getScore(args.id);
+        ctx.creditTracker.recordRetrieval(sessionId(), [args.id]);
 
         return textResult({
           ...entry,
@@ -137,21 +146,19 @@ export async function startMcpServer(memoryDir?: string): Promise<void> {
     },
   );
 
-  server.tool(
+  server.registerTool(
     "memory_search",
-    "Search memories with credit-weighted ranking.",
-    async (extra) => {
+    {
+      description: "Search memories with credit-weighted ranking.",
+      inputSchema: searchInputSchema,
+    },
+    async (args) => {
       try {
-        const args = argsFrom(extra);
-        const query = asString(args.query, "query");
         const limit = clampLimit(args.limit, 5, 20);
-
-        const weighted = await creditWeightedSearch(query, ctx.memoryStore, ctx.creditTracker, limit);
-        const typeFilter = args.type;
-        const filtered =
-          typeFilter && isMemoryType(typeFilter)
-            ? weighted.filter((item) => item.type === typeFilter)
-            : weighted;
+        const weighted = await creditWeightedSearch(args.query, ctx.memoryStore, ctx.creditTracker, limit);
+        const filtered = args.type
+          ? weighted.filter((item) => item.type === args.type)
+          : weighted;
 
         ctx.creditTracker.recordRetrieval(
           sessionId(),
@@ -177,27 +184,27 @@ export async function startMcpServer(memoryDir?: string): Promise<void> {
     },
   );
 
-  server.tool(
+  server.registerTool(
     "memory_update",
-    "Update existing memory content.",
-    async (extra) => {
+    {
+      description: "Update existing memory content.",
+      inputSchema: updateInputSchema,
+    },
+    async (args) => {
       try {
-        const args = argsFrom(extra);
-        const id = asString(args.id, "id");
-        const content = asString(args.content, "content");
-        const before = await ctx.memoryStore.retrieve(id);
-        const updated = await ctx.memoryStore.update(id, content);
+        const before = await ctx.memoryStore.retrieve(args.id);
+        const updated = await ctx.memoryStore.update(args.id, args.content);
 
         let contradiction: ReturnType<typeof detectContradiction> | undefined;
         if (updated.type === "entity") {
           const peers = (await ctx.memoryStore.search(updated.name, "entity", 50)).filter(
             (entry) => entry.category === updated.category && entry.id !== updated.id,
           );
-          contradiction = detectContradiction(content, peers);
+          contradiction = detectContradiction(args.content, peers);
         }
 
         return textResult({
-          id,
+          id: args.id,
           updated: true,
           previous_updated_at: before.updated,
           contradiction,
@@ -209,14 +216,15 @@ export async function startMcpServer(memoryDir?: string): Promise<void> {
     },
   );
 
-  server.tool(
+  server.registerTool(
     "memory_delete",
-    "Archive a memory entry.",
-    async (extra) => {
+    {
+      description: "Archive a memory entry.",
+      inputSchema: deleteInputSchema,
+    },
+    async (args) => {
       try {
-        const args = argsFrom(extra);
-        const id = asString(args.id, "id");
-        const result = await ctx.memoryStore.delete(id);
+        const result = await ctx.memoryStore.delete(args.id);
         return textResult({
           id: result.id,
           archived: result.archived,
@@ -229,12 +237,14 @@ export async function startMcpServer(memoryDir?: string): Promise<void> {
     },
   );
 
-  server.tool(
+  server.registerTool(
     "credit_report",
-    "Report current memory credit statistics.",
-    async (extra) => {
+    {
+      description: "Report current memory credit statistics.",
+      inputSchema: reportInputSchema,
+    },
+    async (args) => {
       try {
-        const args = argsFrom(extra);
         const topN = clampLimit(args.top_n, 10, 100);
         const top = ctx.creditTracker.getTopScored(topN);
         const bottom = [...ctx.creditTracker.getTopScored(10_000)]
@@ -257,9 +267,12 @@ export async function startMcpServer(memoryDir?: string): Promise<void> {
     },
   );
 
-  server.tool(
+  server.registerTool(
     "memory_compact",
-    "Run consolidation, promotion, and pruning.",
+    {
+      description: "Run consolidation, promotion, and pruning.",
+      inputSchema: {},
+    },
     async () => {
       try {
         const report = await memoryCompact(ctx.memoryStore, ctx.creditTracker);

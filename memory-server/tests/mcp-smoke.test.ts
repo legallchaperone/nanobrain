@@ -18,7 +18,7 @@ afterEach(async () => {
 });
 
 describe("mcp server smoke", () => {
-  it("lists expected memory tools over stdio", async () => {
+  it("lists tools and supports store/retrieve flow", async () => {
     const memoryDir = await createTempMemoryDir();
     dirs.push(memoryDir);
 
@@ -44,6 +44,31 @@ describe("mcp server smoke", () => {
       expect(names).toContain("memory_store");
       expect(names).toContain("memory_retrieve");
       expect(names).toContain("memory_search");
+
+      const storeResult = await client.callTool({
+        name: "memory_store",
+        arguments: {
+          type: "entity",
+          category: "people",
+          name: "mcp-test-user",
+          content: "- stores from smoke test",
+          tags: ["smoke"],
+        },
+      });
+      expect(storeResult.isError).not.toBe(true);
+
+      const storeText = storeResult.content.find((item) => item.type === "text");
+      const storedPayload = JSON.parse(storeText?.text ?? "{}") as { id?: string };
+      expect(storedPayload.id).toBe("entity-people-mcp-test-user");
+
+      const retrieveResult = await client.callTool({
+        name: "memory_retrieve",
+        arguments: { id: "entity-people-mcp-test-user" },
+      });
+      expect(retrieveResult.isError).not.toBe(true);
+
+      const retrieveText = retrieveResult.content.find((item) => item.type === "text");
+      expect(retrieveText?.text).toContain("mcp-test-user");
     } finally {
       await client.close();
       await transport.close();
