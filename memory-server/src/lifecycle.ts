@@ -104,10 +104,15 @@ export async function promote(
   creditTracker: CreditTracker,
 ): Promise<{ promoted: number; details: string[] }> {
   const episodes = await memoryStore.list("episode");
+  const promotedEpisodeIds = getAlreadyPromotedEpisodeIds(creditTracker);
   let promoted = 0;
   const details: string[] = [];
 
   for (const episode of episodes) {
+    if (promotedEpisodeIds.has(episode.id)) {
+      continue;
+    }
+
     const score = creditTracker.getScore(episode.id);
     if (score <= 0.7) {
       continue;
@@ -128,6 +133,7 @@ export async function promote(
       "",
       ...bulletFacts,
     ].join("\n");
+    const now = new Date().toISOString();
 
     try {
       await memoryStore.storeEntity("projects", entityName, promotedContent, [
@@ -136,10 +142,19 @@ export async function promote(
       ]);
     } catch {
       const existing = await memoryStore.retrieve(entityId);
-      await memoryStore.update(
-        entityId,
-        `${existing.content.trim()}\n${bulletFacts.join("\n")}`,
+      const existingLines = new Set(
+        existing.content
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean),
       );
+      const missingFacts = bulletFacts.filter((fact) => !existingLines.has(fact));
+      if (missingFacts.length > 0) {
+        await memoryStore.update(
+          entityId,
+          `${existing.content.trim()}\n${missingFacts.join("\n")}`,
+        );
+      }
     }
 
     creditTracker.ensureRecord(entityId);
@@ -148,6 +163,19 @@ export async function promote(
     creditTracker.db
       .prepare("UPDATE credit_records SET score = ? WHERE id = ?")
       .run(transferred, entityId);
+    // Demote source episode below promotion threshold after transfer.
+    creditTracker.db
+      .prepare("UPDATE credit_records SET score = ? WHERE id = ?")
+      .run(Math.min(score, 0.69), episode.id);
+    creditTracker.db
+      .prepare("INSERT INTO lifecycle_log(action, target_ids, details, created_at) VALUES(?, ?, ?, ?)")
+      .run(
+        "promote",
+        JSON.stringify([episode.id, entityId]),
+        `Promoted facts from ${episode.id} into ${entityId}`,
+        now,
+      );
+    promotedEpisodeIds.add(episode.id);
 
     promoted += 1;
     details.push(
@@ -216,4 +244,25 @@ export async function readStrategy(strategyPath: string): Promise<string> {
 function tagOverlap(cluster: MemoryEntry[], candidate: MemoryEntry): number {
   const clusterTags = new Set(cluster.flatMap((entry) => entry.tags));
   return candidate.tags.filter((tag) => clusterTags.has(tag)).length;
+}
+
+function getAlreadyPromotedEpisodeIds(creditTracker: CreditTracker): Set<string> {
+  const rows = creditTracker.db
+    .prepare("SELECT target_ids FROM lifecycle_log WHERE action = 'promote'")
+    .all() as Array<{ target_ids: string }>;
+
+  const promoted = new Set<string>();
+  for (const row of rows) {
+    try {
+      const ids = JSON.parse(row.target_ids) as string[];
+      for (const id of ids) {
+        if (typeof id === "string" && id.startsWith("episode-")) {
+          promoted.add(id);
+        }
+      }
+    } catch {
+      // Ignore malformed legacy rows.
+    }
+  }
+  return promoted;
 }

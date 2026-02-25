@@ -100,4 +100,44 @@ describe("lifecycle.promote", () => {
     const entities = await store.list("entity");
     expect(entities.some((entry) => entry.id.startsWith("entity-projects-promoted-"))).toBe(true);
   });
+
+  it("does not re-promote the same episode repeatedly", async () => {
+    const memoryDir = await createTempMemoryDir();
+    dirs.push(memoryDir);
+    const store = new MemoryStore(memoryDir);
+    const tracker = new CreditTracker(path.join(memoryDir, "engine.db"), { alpha: 0.8 });
+    trackers.push(tracker);
+
+    const episode = await store.storeEpisode(
+      "repeatable-promotion",
+      "# Session\n\n- fact one\n- fact two",
+      ["planning"],
+      false,
+      new Date("2026-02-22T10:00:00.000Z"),
+    );
+
+    tracker.ensureRecord(episode.id);
+    tracker.db.prepare("UPDATE credit_records SET score = 0.9 WHERE id = ?").run(episode.id);
+
+    const first = await promote(store, tracker);
+    expect(first.promoted).toBe(1);
+
+    const entityId = "entity-projects-promoted-repeatable-promotion";
+    const afterFirst = await store.retrieve(entityId);
+    const scoreAfterFirst = tracker.getScore(entityId);
+
+    const second = await promote(store, tracker);
+    expect(second.promoted).toBe(0);
+
+    const afterSecond = await store.retrieve(entityId);
+    const scoreAfterSecond = tracker.getScore(entityId);
+
+    const factOneCount = (afterSecond.content.match(/- fact one/g) ?? []).length;
+    const factTwoCount = (afterSecond.content.match(/- fact two/g) ?? []).length;
+
+    expect(afterSecond.content).toBe(afterFirst.content);
+    expect(scoreAfterSecond).toBe(scoreAfterFirst);
+    expect(factOneCount).toBe(1);
+    expect(factTwoCount).toBe(1);
+  });
 });
