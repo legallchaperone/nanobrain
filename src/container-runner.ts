@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import path from "node:path";
 
+/** Env vars passed through to the container (includes generic AWS config). */
 export const PROVIDER_ENV_VARS = [
   "ANTHROPIC_API_KEY",
   "OPENAI_API_KEY",
@@ -15,6 +16,21 @@ export const PROVIDER_ENV_VARS = [
   "AWS_SECRET_ACCESS_KEY",
   "AWS_PROFILE",
   "AWS_REGION",
+] as const;
+
+/** Env vars that indicate a provider API key is set. Excludes AWS_REGION and AWS_PROFILE so that generic AWS config alone does not pass validation. */
+export const PROVIDER_KEY_ENV_VARS = [
+  "ANTHROPIC_API_KEY",
+  "OPENAI_API_KEY",
+  "DEEPSEEK_API_KEY",
+  "GROQ_API_KEY",
+  "GOOGLE_GENERATIVE_AI_API_KEY",
+  "XAI_API_KEY",
+  "TOGETHER_API_KEY",
+  "MISTRAL_API_KEY",
+  "COHERE_API_KEY",
+  "AWS_ACCESS_KEY_ID",
+  "AWS_SECRET_ACCESS_KEY",
 ] as const;
 
 export interface SpawnContainerOptions {

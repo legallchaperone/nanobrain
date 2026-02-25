@@ -10,7 +10,7 @@ import { generateMemoryMd } from "../memory-server/src/memory-generator.js";
 import { MemoryStore } from "../memory-server/src/memory-store.js";
 import {
   destroyContainer,
-  PROVIDER_ENV_VARS,
+  PROVIDER_KEY_ENV_VARS,
   spawnContainer,
 } from "./container-runner.js";
 import { TaskScheduler } from "./task-scheduler.js";
@@ -258,7 +258,7 @@ async function main(): Promise<void> {
   const parent = path.dirname(entryDir);
   const projectRoot =
     path.basename(parent) === "dist" ? path.dirname(parent) : parent;
-  const hasProviderKey = PROVIDER_ENV_VARS.some((k) => process.env[k]);
+  const hasProviderKey = PROVIDER_KEY_ENV_VARS.some((k) => process.env[k]);
   if (!hasProviderKey) {
     throw new Error(
       "At least one provider API key is required. Set one of: ANTHROPIC_API_KEY, OPENAI_API_KEY, DEEPSEEK_API_KEY, GROQ_API_KEY, etc.",
