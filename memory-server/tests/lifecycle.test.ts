@@ -3,7 +3,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { CreditTracker } from "../src/credit-tracker.js";
-import { prune } from "../src/lifecycle.js";
+import { consolidate, promote, prune } from "../src/lifecycle.js";
 import { MemoryStore } from "../src/memory-store.js";
 import { createTempMemoryDir, removeDir } from "./test-helpers.js";
 
@@ -44,5 +44,60 @@ describe("lifecycle.prune", () => {
 
     await expect(store.retrieve(project.id)).rejects.toThrow(/not found/i);
     await expect(store.retrieve(person.id)).resolves.toBeTruthy();
+  });
+});
+
+describe("lifecycle.consolidate", () => {
+  it("merges same-day episodes with overlapping tags", async () => {
+    const memoryDir = await createTempMemoryDir();
+    dirs.push(memoryDir);
+    const store = new MemoryStore(memoryDir);
+    const tracker = new CreditTracker(path.join(memoryDir, "engine.db"), { alpha: 0.5 });
+    trackers.push(tracker);
+
+    const day = new Date("2026-02-20T10:00:00.000Z");
+    const ep1 = await store.storeEpisode("debug-auth", "- fixed login", ["auth", "debug"], false, day);
+    const ep2 = await store.storeEpisode("debug-session", "- traced token flow", ["auth"], false, day);
+
+    tracker.ensureRecord(ep1.id);
+    tracker.ensureRecord(ep2.id);
+
+    const report = await consolidate(store, tracker);
+    expect(report.consolidated).toBe(1);
+
+    await expect(store.retrieve(ep1.id)).rejects.toThrow(/not found/i);
+    await expect(store.retrieve(ep2.id)).rejects.toThrow(/not found/i);
+
+    const episodes = await store.list("episode");
+    const merged = episodes.find((entry) => entry.id.includes("merged"));
+    expect(merged).toBeTruthy();
+  });
+});
+
+describe("lifecycle.promote", () => {
+  it("promotes high-score episodes into project entities", async () => {
+    const memoryDir = await createTempMemoryDir();
+    dirs.push(memoryDir);
+    const store = new MemoryStore(memoryDir);
+    const tracker = new CreditTracker(path.join(memoryDir, "engine.db"), { alpha: 0.8 });
+    trackers.push(tracker);
+
+    const episode = await store.storeEpisode(
+      "planning-sync",
+      "# Session\n\n- user prefers short status updates\n- keep Docker setup simple",
+      ["planning"],
+      false,
+      new Date("2026-02-21T10:00:00.000Z"),
+    );
+
+    tracker.recordRetrieval("s-promote", [episode.id]);
+    tracker.applyOutcome("s-promote", "task_completed");
+    tracker.db.prepare("UPDATE credit_records SET score = 0.9 WHERE id = ?").run(episode.id);
+
+    const report = await promote(store, tracker);
+    expect(report.promoted).toBeGreaterThanOrEqual(1);
+
+    const entities = await store.list("entity");
+    expect(entities.some((entry) => entry.id.startsWith("entity-projects-promoted-"))).toBe(true);
   });
 });

@@ -7,6 +7,10 @@ import { MemoryEntry, MemoryFrontmatter, MemoryType, SearchResult } from "./type
 export class MemoryStore {
   constructor(private readonly memoryDir: string) {}
 
+  async list(type?: MemoryType): Promise<MemoryEntry[]> {
+    return this.loadAllEntries(type);
+  }
+
   async storeEntity(
     category: string,
     name: string,
