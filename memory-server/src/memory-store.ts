@@ -50,6 +50,7 @@ export class MemoryStore {
       tags,
       pinned,
       content,
+      createdAt: now,
     });
 
     return { id, path: relativePath, created: true };
@@ -152,6 +153,7 @@ export class MemoryStore {
       tags: string[];
       pinned: boolean;
       content: string;
+      createdAt?: Date;
     },
   ): Promise<void> {
     const absolutePath = path.join(this.memoryDir, relativePath);
@@ -164,7 +166,7 @@ export class MemoryStore {
       }
     }
 
-    const now = new Date().toISOString();
+    const now = (args.createdAt ?? new Date()).toISOString();
     const frontmatter: MemoryFrontmatter = {
       id: args.id,
       type: args.type,

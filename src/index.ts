@@ -251,7 +251,10 @@ async function runInteractiveSession(projectRoot: string, apiKey: string): Promi
 }
 
 async function main(): Promise<void> {
-  const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+  const entryDir = path.dirname(fileURLToPath(import.meta.url));
+  const parent = path.dirname(entryDir);
+  const projectRoot =
+    path.basename(parent) === "dist" ? path.dirname(parent) : parent;
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error("ANTHROPIC_API_KEY is required.");

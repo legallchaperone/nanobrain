@@ -65,6 +65,19 @@ describe("memory-store", () => {
     expect(byContent[0]?.id).toBe("entity-projects-nanobrain");
   });
 
+  it("uses caller-provided date for episode frontmatter created/updated", async () => {
+    const memoryDir = await createTempMemoryDir();
+    dirs.push(memoryDir);
+    const store = new MemoryStore(memoryDir);
+
+    const day = new Date("2026-02-20T14:30:00.000Z");
+    const created = await store.storeEpisode("test-ep", "- fact", [], false, day);
+    const entry = await store.retrieve(created.id);
+
+    expect(entry.created.slice(0, 10)).toBe("2026-02-20");
+    expect(entry.id).toContain("2026-02");
+  });
+
   it("archives a memory on delete", async () => {
     const memoryDir = await createTempMemoryDir();
     dirs.push(memoryDir);

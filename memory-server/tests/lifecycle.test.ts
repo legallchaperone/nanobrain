@@ -71,6 +71,7 @@ describe("lifecycle.consolidate", () => {
     const episodes = await store.list("episode");
     const merged = episodes.find((entry) => entry.id.includes("merged"));
     expect(merged).toBeTruthy();
+    expect(merged?.created.slice(0, 10)).toBe("2026-02-20");
   });
 });
 
