@@ -172,41 +172,69 @@ async function runInteractiveSession(projectRoot: string, apiKey: string): Promi
   proc.stderr.on("data", (chunk) => process.stderr.write(chunk));
 
   let requestedQuit = false;
+  let stopping = false;
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
     terminal: true,
   });
 
+  const stopSession = async (): Promise<void> => {
+    if (stopping) {
+      return;
+    }
+    stopping = true;
+    requestedQuit = true;
+    rl.close();
+
+    // Stop stdin first, then terminate docker run process.
+    if (!proc.stdin.destroyed) {
+      proc.stdin.end();
+    }
+    if (!proc.killed) {
+      proc.kill("SIGTERM");
+      setTimeout(() => {
+        if (!proc.killed) {
+          proc.kill("SIGKILL");
+        }
+      }, 3000).unref();
+    }
+
+    await destroyContainer(sessionId);
+  };
+
   console.log("Session started. Commands: /good /bad /status /compact /quit");
 
   rl.on("line", async (line) => {
-    const trimmed = line.trim();
-    if (trimmed === "/good") {
-      await handleFeedback(projectRoot, MEMORY_SESSION_ID, true);
-      console.log("Recorded positive feedback.");
-      return;
+    try {
+      const trimmed = line.trim();
+      if (trimmed === "/good") {
+        await handleFeedback(projectRoot, MEMORY_SESSION_ID, true);
+        console.log("Recorded positive feedback.");
+        return;
+      }
+      if (trimmed === "/bad") {
+        await handleFeedback(projectRoot, MEMORY_SESSION_ID, false);
+        console.log("Recorded negative feedback.");
+        return;
+      }
+      if (trimmed === "/status") {
+        await printStatus(projectRoot);
+        return;
+      }
+      if (trimmed === "/compact") {
+        await runCompact(projectRoot);
+        return;
+      }
+      if (trimmed === "/quit") {
+        await stopSession();
+        return;
+      }
+      proc.stdin.write(`${line}\n`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Command failed";
+      console.error(message);
     }
-    if (trimmed === "/bad") {
-      await handleFeedback(projectRoot, MEMORY_SESSION_ID, false);
-      console.log("Recorded negative feedback.");
-      return;
-    }
-    if (trimmed === "/status") {
-      await printStatus(projectRoot);
-      return;
-    }
-    if (trimmed === "/compact") {
-      await runCompact(projectRoot);
-      return;
-    }
-    if (trimmed === "/quit") {
-      requestedQuit = true;
-      rl.close();
-      await destroyContainer(sessionId);
-      return;
-    }
-    proc.stdin.write(`${line}\n`);
   });
 
   await new Promise<void>((resolve) => {

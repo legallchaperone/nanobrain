@@ -2,4 +2,6 @@ node_modules/
 dist/
 .npm-cache/
 data/sessions/
+data/scheduler-state.json
+memory/MEMORY.md
 *.db
