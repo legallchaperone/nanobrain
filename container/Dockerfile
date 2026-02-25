@@ -2,6 +2,10 @@ FROM node:20-slim
 
 RUN npm install -g opencode-ai@latest
 
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /workspace
 
 # Runtime dependencies required by the memory MCP server.
