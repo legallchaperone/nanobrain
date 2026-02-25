@@ -1,0 +1,19 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "anthropic/claude-sonnet-4-5-20250929",
+  "provider": {
+    "anthropic": {
+      "apiKey": "process.env.ANTHROPIC_API_KEY"
+    }
+  },
+  "mcp": {
+    "clawbrain": {
+      "command": "node",
+      "args": ["/workspace/dist/memory-server/src/index.js"],
+      "env": {
+        "MEMORY_DIR": "/workspace/memory",
+        "SESSION_ID": "process.env.SESSION_ID"
+      }
+    }
+  }
+}

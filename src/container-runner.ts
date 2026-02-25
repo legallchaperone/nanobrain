@@ -23,6 +23,8 @@ export function spawnContainer(
   const memoryPath = path.join(projectRoot, "memory");
   const sessionsPath = path.join(projectRoot, "data", "sessions");
   const memoryServerPath = path.join(projectRoot, "memory-server");
+  const opencodeConfigPath = path.join(projectRoot, "container", "opencode.json");
+  const systemPromptPath = path.join(projectRoot, "container", "SYSTEM_PROMPT.md");
 
   const args = [
     "run",
@@ -36,10 +38,16 @@ export function spawnContainer(
     `${sessionsPath}:/workspace/sessions`,
     "-v",
     `${memoryServerPath}:/workspace/memory-server:${memoryServerMountMode}`,
+    "-v",
+    `${opencodeConfigPath}:/workspace/opencode.json:ro`,
+    "-v",
+    `${systemPromptPath}:/workspace/SYSTEM_PROMPT.md:ro`,
     "-e",
     "OPENCODE_CONFIG=/workspace/opencode.json",
     "-e",
     `ANTHROPIC_API_KEY=${apiKey}`,
+    "-e",
+    `SESSION_ID=${sessionId}`,
     image,
     "opencode",
   ];
