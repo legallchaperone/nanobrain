@@ -155,10 +155,13 @@ export async function startMcpServer(memoryDir?: string): Promise<void> {
     async (args) => {
       try {
         const limit = clampLimit(args.limit, 5, 20);
-        const weighted = await creditWeightedSearch(args.query, ctx.memoryStore, ctx.creditTracker, limit);
-        const filtered = args.type
-          ? weighted.filter((item) => item.type === args.type)
-          : weighted;
+        const filtered = await creditWeightedSearch(
+          args.query,
+          ctx.memoryStore,
+          ctx.creditTracker,
+          limit,
+          args.type,
+        );
 
         ctx.creditTracker.recordRetrieval(
           sessionId(),

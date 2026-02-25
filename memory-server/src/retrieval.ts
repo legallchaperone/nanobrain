@@ -1,5 +1,6 @@
 import { CreditTracker } from "./credit-tracker.js";
 import { MemoryStore } from "./memory-store.js";
+import { MemoryType } from "./types.js";
 
 export interface WeightedResult {
   id: string;
@@ -19,8 +20,9 @@ export async function creditWeightedSearch(
   memoryStore: MemoryStore,
   creditTracker: CreditTracker,
   limit = 5,
+  type?: MemoryType,
 ): Promise<WeightedResult[]> {
-  const candidates = await memoryStore.search(query, undefined, Math.max(limit * 4, 10));
+  const candidates = await memoryStore.search(query, type, Math.max(limit * 4, 10));
   const weighted = candidates.map((candidate) => {
     const creditScore = creditTracker.getScore(candidate.id);
     const combinedScore = candidate.relevanceScore * 0.4 + creditScore * 0.6;

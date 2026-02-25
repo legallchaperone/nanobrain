@@ -74,4 +74,77 @@ describe("mcp server smoke", () => {
       await transport.close();
     }
   });
+
+  it("applies type filter before limiting in memory_search", async () => {
+    const memoryDir = await createTempMemoryDir();
+    dirs.push(memoryDir);
+
+    const transport = new StdioClientTransport({
+      command: path.resolve(process.cwd(), "node_modules/.bin/tsx"),
+      args: [path.resolve(process.cwd(), "memory-server/src/index.ts")],
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        MEMORY_DIR: memoryDir,
+        SESSION_ID: "mcp-smoke-type-filter",
+      },
+      stderr: "pipe",
+    });
+
+    const client = new Client({ name: "mcp-smoke-client", version: "0.1.0" });
+
+    try {
+      await client.connect(transport);
+
+      // Create high-relevance entities and lower-relevance episode for same query.
+      await client.callTool({
+        name: "memory_store",
+        arguments: {
+          type: "entity",
+          category: "projects",
+          name: "apple-entity-one",
+          content: "- entity entry",
+        },
+      });
+      await client.callTool({
+        name: "memory_store",
+        arguments: {
+          type: "entity",
+          category: "projects",
+          name: "apple-entity-two",
+          content: "- entity entry",
+        },
+      });
+      await client.callTool({
+        name: "memory_store",
+        arguments: {
+          type: "episode",
+          name: "notes-session",
+          content: "- discussed apple rollout timeline",
+        },
+      });
+
+      const searchResult = await client.callTool({
+        name: "memory_search",
+        arguments: {
+          query: "apple",
+          type: "episode",
+          limit: 1,
+        },
+      });
+
+      expect(searchResult.isError).not.toBe(true);
+      const text = searchResult.content.find((item) => item.type === "text")?.text ?? "{}";
+      const payload = JSON.parse(text) as {
+        results?: Array<{ type: string }>;
+        total_matches?: number;
+      };
+
+      expect(payload.total_matches).toBe(1);
+      expect(payload.results?.[0]?.type).toBe("episode");
+    } finally {
+      await client.close();
+      await transport.close();
+    }
+  });
 });

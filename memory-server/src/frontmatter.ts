@@ -6,15 +6,24 @@ function parseArray(raw: string): string[] {
     return [];
   }
 
-  const inner = value.slice(1, -1).trim();
-  if (!inner) {
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((item): item is string => typeof item === "string");
+    }
     return [];
-  }
+  } catch {
+    const inner = value.slice(1, -1).trim();
+    if (!inner) {
+      return [];
+    }
 
-  return inner
-    .split(",")
-    .map((item) => item.trim().replace(/^['"]|['"]$/g, ""))
-    .filter(Boolean);
+    // Fallback for legacy tag formats that are not strict JSON.
+    return inner
+      .split(",")
+      .map((item) => item.trim().replace(/^['"]|['"]$/g, ""))
+      .filter(Boolean);
+  }
 }
 
 export function parseFrontmatter(markdown: string): {
@@ -29,7 +38,6 @@ export function parseFrontmatter(markdown: string): {
   if (parts.length < 2) {
     throw new Error("Invalid frontmatter format");
   }
-
   const rawFrontmatter = parts[0]?.replace(/^---\n/, "") ?? "";
   const content = parts.slice(1).join("\n---\n").trim();
   const lines = rawFrontmatter.split("\n");
