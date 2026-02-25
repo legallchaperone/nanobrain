@@ -287,7 +287,7 @@ export async function runHealthcheck(memoryDir?: string): Promise<void> {
   ctx.creditTracker.close();
 }
 
-if (process.argv[1] && process.argv[1].endsWith("index.js")) {
+if (process.argv[1] && (process.argv[1].endsWith("index.js") || process.argv[1].endsWith("index.ts"))) {
   const mode = process.env.NANOBRAIN_MODE ?? "mcp";
   const runner = mode === "healthcheck" ? runHealthcheck() : startMcpServer();
   runner.catch((error: unknown) => {
