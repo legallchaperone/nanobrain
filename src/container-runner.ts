@@ -46,8 +46,6 @@ export function spawnContainer(
     "OPENCODE_CONFIG=/workspace/opencode.json",
     "-e",
     `ANTHROPIC_API_KEY=${apiKey}`,
-    "-e",
-    `SESSION_ID=${sessionId}`,
     image,
     "opencode",
   ];

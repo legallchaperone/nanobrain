@@ -13,6 +13,7 @@ import { TaskScheduler } from "./task-scheduler.js";
 
 const VERSION = "0.1.0";
 const IMAGE_NAME = "nanobrain-agent:latest";
+const MEMORY_SESSION_ID = "local-session";
 
 async function runCommand(
   command: string,
@@ -182,12 +183,12 @@ async function runInteractiveSession(projectRoot: string, apiKey: string): Promi
   rl.on("line", async (line) => {
     const trimmed = line.trim();
     if (trimmed === "/good") {
-      await handleFeedback(projectRoot, sessionId, true);
+      await handleFeedback(projectRoot, MEMORY_SESSION_ID, true);
       console.log("Recorded positive feedback.");
       return;
     }
     if (trimmed === "/bad") {
-      await handleFeedback(projectRoot, sessionId, false);
+      await handleFeedback(projectRoot, MEMORY_SESSION_ID, false);
       console.log("Recorded negative feedback.");
       return;
     }

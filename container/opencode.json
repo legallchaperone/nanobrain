@@ -11,8 +11,7 @@
       "command": "node",
       "args": ["/workspace/dist/memory-server/src/index.js"],
       "env": {
-        "MEMORY_DIR": "/workspace/memory",
-        "SESSION_ID": "process.env.SESSION_ID"
+        "MEMORY_DIR": "/workspace/memory"
       }
     }
   }
