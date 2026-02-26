@@ -18,7 +18,7 @@ export const PROVIDER_ENV_VARS = [
   "AWS_REGION",
 ] as const;
 
-/** Env vars that indicate a provider API key is set. Excludes AWS_REGION and AWS_PROFILE so that generic AWS config alone does not pass validation. */
+/** Env vars that indicate an AI provider API key is set. Excludes generic AWS vars (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_PROFILE, AWS_REGION) so that non-Bedrock AWS usage alone does not pass validation. */
 export const PROVIDER_KEY_ENV_VARS = [
   "ANTHROPIC_API_KEY",
   "OPENAI_API_KEY",
@@ -29,8 +29,6 @@ export const PROVIDER_KEY_ENV_VARS = [
   "TOGETHER_API_KEY",
   "MISTRAL_API_KEY",
   "COHERE_API_KEY",
-  "AWS_ACCESS_KEY_ID",
-  "AWS_SECRET_ACCESS_KEY",
 ] as const;
 
 export interface SpawnContainerOptions {
